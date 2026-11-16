@@ -577,16 +577,17 @@ function think(u){
  const vis=a.target&&now-a.lastSeenT<.6,known=a.target&&now-a.lastSeenT<skill.memory,hp=u.hp/100;
  if(u.cur!==0&&!vis&&u.slots[0].ammo>0)switchTo(u,0);
  if(!vis&&sl.ammo<def.mag*.6)startReload(u);
- let st,pk=null,gp=null;const ob=M==='ctf'||M==='con'||M==='koh',td=a.target?Math.hypot(a.target.x-u.x,a.target.y-u.y):1e9,storm=BR&&zone&&Math.hypot(u.x-zone.x,u.y-zone.y)>zone.r*.92;
+ let st,pk=null,gp=null;const ob=M==='ctf'||M==='con'||M==='koh',td=a.target?Math.hypot(a.target.x-u.x,a.target.y-u.y):1e9,storm=BR&&zone&&Math.hypot(u.x-zone.x,u.y-zone.y)>zone.r*.92,fol=M==='ffa'&&player&&player.alive&&u!==player&&u.team===player.team&&!u.tank&&Math.hypot(player.x-u.x,player.y-u.y)>150;
  const kit=hp<.7?nearestPickup(u.x,u.y,900):null,rk=u.slots.map(s=>RANK[s.def.id]),mr=Math.min(...rk),br=Math.max(...rk);
  if(hp<.45)a.hiding=true;else if(hp>=.72||now-a.threatT>25)a.hiding=false;
  botNade(u,a,vis,now);botStrike(u,a,now);if(u.carry)st='carry';
  else if(hp<.32&&(known||now-u.lastHit<4))st='retreat';
  else if(storm&&!u.tank)st='storm';
  else if(a.hiding&&!kit)st='hide';
- else if(known&&br>=0&&(!ob||td<420||now-u.lastHit<3))st='engage';
+ else if(known&&br>=0&&(!(ob||fol)||td<420||now-u.lastHit<3))st='engage';
  else if(kit){st='health';pk=kit}
- else if((gp=nearestPickup(u.x,u.y,br>=4?500:ob?420:1300,1,mr,u.slots.map(s=>s.def.id))))st='loot';
+ else if((gp=nearestPickup(u.x,u.y,br>=4?500:ob?420:fol?320:1300,1,mr,u.slots.map(s=>s.def.id))))st='loot';
+ else if(fol)st='follow';
  else if(now-a.investT<7&&!ob)st='invest';else st='advance';
  a.state=st;
  if(st==='engage'){
@@ -606,6 +607,7 @@ function think(u){
   const hp2=nearestPickup(u.x,u.y,900);
   if(hp2)setGoal(u,hp2.x,hp2.y,40);else if(c)setGoal(u,c.x,c.y,20);else{const b=BASES[u.team]||u;setGoal(u,b.x,b.y,100)}
  }else if(st==='health'){a.mode='health';if(pk)setGoal(u,pk.x,pk.y,30)}
+ else if(st==='follow'){a.mode='follow';setGoal(u,player.x+rand(-90,90),player.y+rand(-90,90),70)}
  else if(st==='storm'){a.mode='storm';setGoal(u,zone.x+rand(-.3,.3)*zone.r,zone.y+rand(-.3,.3)*zone.r,160)}
  else if(st==='loot'){a.mode='loot';setGoal(u,gp.x,gp.y,30)}
  else if(st==='carry'){a.mode='carry';const m=flags[u.team];setGoal(u,m.hx,m.hy,40)}
@@ -636,7 +638,7 @@ function botSteer(u,dt){
   if(a.skipT<=0){a.skipT=.12;for(let k=Math.min(a.pathI+4,p.length-1);k>a.pathI;k--)if(walkLine(u.x,u.y,p[k].x,p[k].y)){a.pathI=k;break}}
   const wp=p[a.pathI],dx=wp.x-u.x,dy=wp.y-u.y,d=Math.hypot(dx,dy);
   if(d<14){a.pathI++;if(a.pathI>=p.length){a.path=null;a.arrived=true}}else{mx=dx/d;my=dy/d}
-  sf=a.state==='advance'?1.05:a.mode==='cover'||a.state==='retreat'||a.state==='carry'||a.state==='hide'||a.state==='loot'||a.state==='storm'?1.2:1;
+  sf=a.state==='advance'?1.05:a.mode==='cover'||a.state==='retreat'||a.state==='carry'||a.state==='hide'||a.state==='loot'||a.state==='storm'||a.state==='follow'?1.2:1;
  }
  if(a.dodgeT>0){a.dodgeT-=dt;mx+=a.dodgeX*1.7;my+=a.dodgeY*1.7}
  const l=Math.hypot(mx,my);if(l>1){mx/=l;my/=l}return[mx,my,sf]}
@@ -710,7 +712,7 @@ function brUpdate(dt){zone.r=Math.max(150,2400-time*8);
  for(const u of units)if(u.alive&&Math.hypot(u.x-zone.x,u.y-zone.y)>zone.r){u.hp-=dt*(3+(2400-zone.r)/450);if(u.hp<=0)killUnit(u,u,{id:'zone'})}
  brT+=dt;if(brT<1)return;brT=0;const pl=player;
  if(pl&&pl.alive)for(const f of units)if(f.alive&&f.peace&&f.team!==pl.team&&Math.hypot(f.x-pl.x,f.y-pl.y)<56){joinClan(pl,f);break}
- for(const a of units)if(a.alive&&a.peace&&a.ai&&Math.random()<.3)for(const b of units)if(b!==a&&b.alive&&b.peace&&b.ai&&b.team!==a.team&&Math.hypot(a.x-b.x,a.y-b.y)<80){joinClan(a,b);break}}
+ for(const a of units)if(a.alive&&a.peace&&a.ai&&a.team!==(pl?pl.team:-9)&&Math.random()<.3)for(const b of units)if(b!==a&&b.alive&&b.peace&&b.ai&&b.team!==a.team&&b.team!==(pl?pl.team:-9)&&Math.hypot(a.x-b.x,a.y-b.y)<80){joinClan(a,b);break}}
 function bubble(u){if(BR&&u.alive&&u.team===0&&!u.isPlayer){ctx.fillStyle='rgba(61,156,255,.22)';ctx.strokeStyle='#3d9cff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(u.x,u.y,19,0,TAU);ctx.fill();ctx.stroke();ctx.font='700 10px "Chakra Petch",sans-serif';ctx.textAlign='center';ctx.fillStyle='#3d9cff';ctx.fillText('▼ CLAN',u.x,u.y-32);return}
 if(!u.peace||!u.team||!u.alive)return;ctx.font='700 11px "Chakra Petch",sans-serif';ctx.textAlign='center';const w=ctx.measureText('Friendly').width+12;ctx.fillStyle='rgba(10,14,12,.8)';ctx.beginPath();ctx.roundRect(u.x-w/2,u.y-42,w,16,6);ctx.fill();ctx.fillStyle='#7be08a';ctx.fillText('Friendly',u.x,u.y-30)}
 function showDrop(c){const el=$('drop'),cv2=$('dropMap'),X=2600,Y=1500,w=Math.min(innerWidth-24,920),h=Math.min(w*Y/X,innerHeight-90);cv2.width=w;cv2.height=h;const x=cv2.getContext('2d');
